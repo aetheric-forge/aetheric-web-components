@@ -7,21 +7,21 @@ namespace Aetheric.Provisioning.Components;
 
 public static class ProvisioningServiceCollectionExtensions
 {
-    /// <summary>Registers the existing local bootstrap backend. Does not change host authentication or middleware.</summary>
+    /// <summary>
+    /// Registers the provisioning bootstrap UI and orchestration layer. Does not change host
+    /// authentication or middleware, and does not supply storage/validation backends - the host
+    /// must separately register IRegistryBootstrapStore, IInfrastructureStateStore,
+    /// IRootCredentialStore, and IRootConnectionValidator before calling this (e.g. the file-backed
+    /// implementations from Aetheric.Provisioning.Persistence/.Infrastructure, as the sample host
+    /// does). This keeps the component library itself free of any specific storage/validation
+    /// backend, so a different host can supply different implementations.
+    /// </summary>
     public static IServiceCollection AddProvisioningBootstrap(this IServiceCollection services,
-        IConfiguration configuration, BootstrapConnectionConfiguration connectionConfiguration)
+        BootstrapConnectionConfiguration connectionConfiguration)
     {
-        services.AddSingleton<IRegistryBootstrapStore>(_ =>
-            new Aetheric.Provisioning.Persistence.FileRegistryBootstrapStore(connectionConfiguration.StateDirectory));
         services.AddSingleton<ISetupRegistryClients, SetupRegistryClients>();
         services.AddScoped<SetupBootstrap>();
         services.AddHttpContextAccessor();
-        services.AddSingleton<IInfrastructureStateStore>(_ =>
-            new Aetheric.Provisioning.Persistence.FileInfrastructureStateStore(connectionConfiguration.StateDirectory));
-        services.AddSingleton<IRootCredentialStore>(_ => new Aetheric.Provisioning.Persistence.ManagedRootCredentialStore(
-            configuration["RootCredentials:Directory"] ?? "data/root-credentials",
-            configuration["RootCredentials:KeyDirectory"] ?? "data/root-key"));
-        services.AddSingleton<IRootConnectionValidator, Aetheric.Provisioning.Infrastructure.RootConnectionValidator>();
         services.AddSingleton<InfrastructureReceipts>();
         services.AddScoped<InfrastructureSetup>();
         services.AddSingleton(connectionConfiguration);
