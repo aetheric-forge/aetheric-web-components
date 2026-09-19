@@ -1,0 +1,40 @@
+@page "/setup/connection-error"
+@using Aetheric.Provisioning.Components
+@inject AdministratorSignInConfiguration SignIn
+
+<PageTitle>Administrator setup could not open</PageTitle>
+<main class="aetheric-provisioning setup-shell">
+    <header><span class="eyebrow">AETHERIC FORGE / PROVISIONING</span></header>
+    <h1>Administrator setup could not open.</h1>
+    @if (Reason == "origin" && SignIn.Origin is not null)
+    {
+        <p class="lede">This page was opened using a different address from the one configured for setup.</p>
+        <p>Open the configured address below, check your Keycloak connection again, then continue to create your administrator.</p>
+        <p><a href="@SetupAddress">Continue at @SignIn.Origin.GetLeftPart(UriPartial.Authority)</a></p>
+        <p class="muted">For a local connection, localhost and 127.0.0.1 are different browser addresses. Use the configured address throughout setup.</p>
+    }
+    else if (Reason == "configuration")
+    {
+        <p>The deployment’s setup address is missing or invalid. Set PROVISIONER_PUBLIC_ORIGIN to the address you use to open the provisioner, then restart it.</p>
+        <p>Use HTTPS for a deployed site. Development also supports a local HTTP address.</p>
+    }
+    else if (Reason == "state")
+    {
+        <p>Initial setup is already complete, or its saved deployment state is unavailable. Check the deployment’s bootstrap state before continuing.</p>
+    }
+    else if (Reason == "ticket")
+    {
+        <p>Your connection check expired, was already used, or was cleared when the provisioner restarted.</p>
+        <p>Check your Keycloak connection again, then continue to administrator setup.</p>
+    }
+    else
+    {
+        <p>The provisioner could not start your setup session. Check the connection again and retry.</p>
+    }
+    <p><a href="@(SetupAddress ?? "/setup")">Return to connection setup</a></p>
+</main>
+
+@code {
+    [SupplyParameterFromQuery(Name = "reason")] public string? Reason { get; set; }
+    private string? SetupAddress => SignIn.Origin is null ? null : new Uri(SignIn.Origin, "/setup").AbsoluteUri;
+}

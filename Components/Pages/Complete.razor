@@ -1,0 +1,33 @@
+@page "/setup/complete"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = SetupAuthentication.AdminPolicy)]
+@using Aetheric.Provisioning.Components
+@using Microsoft.AspNetCore.Components.Forms
+@inject InfrastructureSetup Setup
+@inject NavigationManager Navigation
+<PageTitle>Forge bootstrap complete</PageTitle>
+<main class="aetheric-provisioning setup-shell">
+    <header><span class="eyebrow">AETHERIC FORGE / PROVISIONING</span><span class="badge">@(_ready ? "Bootstrap complete" : "Setup status")</span></header>
+    @if (_ready)
+    {
+        <h1>Your Forge is ready for provisioning.</h1>
+        <p class="lede">Your administrator is verified, and access to Redis, RabbitMQ, Postgres, and MongoDB has been checked and saved.</p>
+        <p>Initial bootstrap is complete.</p>
+        <a href="/simulation">Explore the provisioning simulation</a>
+    }
+    else { <p role="alert">Saved setup could not be verified. Check the deployment state and credential storage.</p> }
+    <form method="post" action="/setup/connection/end"><AntiforgeryToken /><button class="secondary">Sign out</button></form>
+</main>
+@code {
+    private bool _ready;
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            if (!(await Setup.StateAsync(default)).Completed) { Navigation.NavigateTo("/setup/infrastructure"); return; }
+            await Setup.SavedAsync(default);
+            _ready = true;
+        }
+        catch (NavigationException) { throw; }
+        catch (Exception) { _ready = false; }
+    }
+}

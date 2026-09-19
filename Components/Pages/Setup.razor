@@ -1,0 +1,177 @@
+@page "/setup"
+@rendermode InteractiveServer
+@implements IAsyncDisposable
+@using Microsoft.JSInterop
+@inject IJSRuntime JS
+@using Aetheric.Provisioning.Components
+@using Aetheric.Provisioning.Registry
+@inject BootstrapConnectionConfiguration Configuration
+@inject BootstrapConnection Connection
+@inject AdministratorSignInConfiguration SignIn
+@inject SetupSessions Sessions
+@using Microsoft.AspNetCore.Components.Forms
+
+<PageTitle>Set up Aetheric Provisioning</PageTitle>
+<main class="aetheric-provisioning setup-shell">
+    <header><a class="eyebrow brand" href="/">AETHERIC FORGE / PROVISIONING</a><span class="badge">Initial setup</span></header>
+    <nav aria-label="Setup progress" class="setup-progress">
+        <span aria-current="@(!_connected ? "step" : null)">01 · Connect Keycloak</span>
+        <span aria-current="@(_connected ? "step" : null)">02 · Choose administrator</span>
+    </nav>
+    @if (!_connected)
+    {
+        <h1>A home for your platform.</h1>
+        <p class="lede">Start by connecting the Keycloak client that will support provisioning.</p>
+        @if (!Configuration.IsConfigured)
+        {
+            <section class="setup-card" role="status">
+                <h2>Configure your Keycloak destination</h2>
+                <p>This deployment needs a Keycloak address, realm, and provisioner client ID before you can connect. Ask the person deploying this app to supply those settings, then reload this page.</p>
+                <a href="/setup">Check again</a>
+            </section>
+        }
+        else
+        {
+            <section class="setup-card" aria-labelledby="connection-heading">
+                <h2 id="connection-heading">Connect to Keycloak</h2>
+                <dl class="connection-details"><dt>Server</dt><dd>@Configuration.Authority</dd><dt>Realm</dt><dd>@Configuration.Realm</dd></dl>
+                <form @ref="_form" method="post" @onsubmit="Connect" @onsubmit:preventDefault>
+                    <fieldset disabled="@(_busy || !_interactive)">
+                        <legend class="visually-hidden">Client credentials</legend>
+                        <label for="client-id">Client ID</label>
+                        <input id="client-id" name="client-id" autocomplete="off" required maxlength="200" value="@Configuration.ClientId" />
+                        <label for="client-secret">Client secret</label>
+                        <input id="client-secret" name="client-secret" type="password" autocomplete="off" required maxlength="4096" aria-describedby="secret-help" />
+                        <p id="secret-help" class="muted">Use the client’s secret, not your personal password. It is kept temporarily on the server for setup and isn’t saved to disk.</p>
+                        <button type="submit">@(_busy ? "Checking connection…" : "Check connection")</button>
+                    </fieldset>
+                </form>
+                @if (_error is not null) { <p class="setup-error" role="alert">@_error</p> }
+                <p class="muted">This verifies the service account’s realm-admin permission and access to the Keycloak Admin API. It does not create users or assign permissions.</p>
+            </section>
+        }
+    }
+    else
+    {
+        <section class="setup-card connection-success" aria-labelledby="success-heading" tabindex="-1" @ref="_resultHeading">
+            <span class="eyebrow">CONNECTION VERIFIED</span>
+            <h1 id="success-heading">Keycloak is reachable.</h1>
+            <p class="lede">Your service account authenticated with realm-admin permission and successfully accessed the Keycloak Admin API.</p>
+            <dl class="connection-details"><dt>Server</dt><dd>@Configuration.Authority</dd><dt>Realm</dt><dd>@Configuration.Realm</dd><dt>Client</dt><dd>@Configuration.ClientId</dd><dt>Service-account permission</dt><dd>realm-management / realm-admin</dd></dl>
+            <h2>Next: continue administrator setup</h2>
+            <p>Choose or create your Forge administrator, then sign in to connect your infrastructure. If your administrator is already selected, you’ll resume with that account.</p>
+            @if (SignIn.Enabled)
+            {
+                <p>Your verified connection authorizes administrator setup. When you sign in with your chosen account, the provisioner enables browser sign-in for this client and registers its callback.</p>
+                <form method="post" action="/setup/connection/start">
+                    <AntiforgeryToken />
+                    <input type="hidden" name="ticket" value="@_ticket" />
+                    <button type="submit">Continue to administrator setup</button>
+                </form>
+            }
+            else
+            {
+                <aside>Configure BootstrapConnection__PublicOrigin with this app’s public HTTPS origin to enable administrator sign-in.</aside>
+            }
+            <div class="controls"><button class="secondary" @onclick="StartAgain">Check connection again</button></div>
+        </section>
+    }
+    <p role="status" aria-live="polite">@(_busy ? "Contacting Keycloak…" : "")</p>
+    <footer><a href="/simulation">Explore the provisioning simulation</a><p>The simulation is available independently of setup and creates no live resources.</p></footer>
+</main>
+
+@code {
+    private ElementReference _form;
+    private IJSObjectReference? _formModule;
+    public sealed record SubmittedCredentials(string ClientId, string ClientSecret);
+    private string? _error;
+    private string? _ticket;
+    private bool _busy, _interactive, _connected, _focusResult;
+    private ElementReference _resultHeading;
+    private readonly CancellationTokenSource _lifetime = new();
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _formModule = await JS.InvokeAsync<IJSObjectReference>("import", "./_content/Aetheric.Provisioning.Components/setup-credentials.js");
+            _interactive = true;
+            StateHasChanged();
+        }
+        if (_focusResult) { _focusResult = false; await _resultHeading.FocusAsync(); }
+    }
+
+    private async Task Connect()
+    {
+        if (_busy || !_interactive) return;
+        _error = null;
+        _busy = true;
+        try
+        {
+            // Capture the actual DOM values once at submission. Autofill need not raise
+            // input events, so per-keystroke server bindings can contain a stale secret.
+            var credentials = await _formModule!.InvokeAsync<SubmittedCredentials>("takeCredentials", _form);
+            if (string.IsNullOrWhiteSpace(credentials.ClientId) || string.IsNullOrWhiteSpace(credentials.ClientSecret))
+            {
+                _error = "Enter your client ID and client secret.";
+                return;
+            }
+            Sessions.RevokeTicket(_ticket);
+            _ticket = await Connection.CheckAsync(credentials.ClientId, credentials.ClientSecret, _lifetime.Token);
+            _connected = true;
+            _focusResult = true;
+        }
+        catch (OperationCanceledException) when (_lifetime.IsCancellationRequested) { }
+        catch (RegistryBootstrapStaffException ex)
+        {
+            _error = ex.Code switch
+            {
+                "registry.tls_failed" => "The container could not establish a trusted TLS connection to Keycloak. Check the server certificate and the container’s trusted CA certificates.",
+                "registry.dns_failed" => "The container could not resolve the Keycloak server hostname.",
+                "registry.network_failed" => "The container could not connect to the Keycloak server. Check network access and the listening port.",
+                "registry.http_transport_failed" => "The HTTP connection to Keycloak failed before a usable response was received.",
+                "registry.request_timeout" => "The Keycloak request timed out. Check server availability and network access.",
+                "registry.token_issuer_mismatch" => "Keycloak issued a token for a different issuer URL. Check its public hostname/proxy configuration against the server address shown above.",
+                "registry.token_client_mismatch" => "Keycloak issued a token whose authorized client does not match this provisioner client.",
+                "registry.token_expiry_invalid" => "Keycloak returned a token without a usable expiry time.",
+                "registry.token_expired" => "Keycloak returned an expired token. Check the clocks on the provisioner and Keycloak hosts.",
+                "registry.client_authentication_failed" => "The token endpoint did not return a usable service-account token. Check the Keycloak token configuration.",
+                "registry.client_lookup_failed" => "The Admin API did not return a usable client-registration response.",
+                var code when code.StartsWith("registry.token_http_", StringComparison.Ordinal) => "The Keycloak token endpoint returned HTTP " + code["registry.token_http_".Length..] + ". Check its routing and server logs.",
+                var code when code.StartsWith("registry.admin_http_", StringComparison.Ordinal) => "The Keycloak Admin API returned HTTP " + code["registry.admin_http_".Length..] + ". Check its routing and server logs.",
+                "registry.client_not_configured" => "The client ID must match the client configured for this deployment.",
+                var code when code.StartsWith("registry.token_invalid_client_http_", StringComparison.Ordinal) => "Keycloak returned invalid_client. Verify this client exists in the selected realm, uses Client ID and Secret authentication, and that the submitted secret is current.",
+                var code when code.StartsWith("registry.token_unauthorized_client_http_", StringComparison.Ordinal) => "Keycloak returned unauthorized_client. Check that the client is enabled and Service accounts roles is enabled under the client’s Capability config.",
+                var code when code.StartsWith("registry.token_invalid_grant_http_", StringComparison.Ordinal) => "Keycloak returned invalid_grant. Check that the associated service-account user is enabled and inspect the Keycloak event log.",
+                var code when code.StartsWith("registry.token_invalid_request_http_", StringComparison.Ordinal) => "Keycloak returned invalid_request for the client-credentials request. Check Keycloak events and whether the proxy forwards the POST body unchanged.",
+                var code when code.StartsWith("registry.token_invalid_scope_http_", StringComparison.Ordinal) => "Keycloak returned invalid_scope. Inspect its event log and the client scope configuration.",
+                var code when code.StartsWith("registry.token_unsupported_grant_type_http_", StringComparison.Ordinal) => "The token endpoint rejected the client_credentials grant type. Check the endpoint routing and Keycloak events.",
+                var code when code.StartsWith("registry.token_access_denied_http_", StringComparison.Ordinal) => "The token endpoint returned access_denied. Inspect the Keycloak event log for the rejected request.",
+                "registry.realm_admin_required" => "The service-account token does not include realm-management / realm-admin. Check that role assignment and the client’s role scope mappings in this realm.",
+                "registry.admin_api_unauthorized" => "The client authenticated with realm-admin in its token, but the Keycloak Admin API denied access.",
+                "registry.client_missing" => "The configured client was not found in this realm.",
+                "registry.client_unavailable" => "Use an enabled, confidential Keycloak client with service accounts enabled.",
+                _ => "The connection could not be verified. Check the Keycloak configuration and availability, then retry."
+            };
+            _error += " [" + ex.Code + "]";
+        }
+        catch (FileNotFoundException) { _error = "Initialize this deployment’s bootstrap state before connecting. See the deployment setup instructions."; }
+        catch (InvalidDataException) { _error = "The saved bootstrap state is invalid. The deployment administrator must recover it before setup can continue."; }
+        catch (InvalidOperationException) { _error = "Bootstrap is complete or its deployment settings have changed. Check the saved deployment state."; }
+        catch (ArgumentException) { _error = "The client ID must match this deployment, and the Keycloak configuration must use a valid HTTPS address."; }
+        catch (Exception) { _error = "The connection could not be verified. Please retry."; }
+        finally { _busy = false; }
+    }
+
+    private void StartAgain() { Sessions.RevokeTicket(_ticket); _ticket = null; _connected = false; _error = null; }
+    public async ValueTask DisposeAsync()
+    {
+        _lifetime.Cancel();
+        _lifetime.Dispose();
+        if (_formModule is not null)
+        {
+            try { await _formModule.DisposeAsync(); }
+            catch (JSDisconnectedException) { }
+        }
+    }
+}

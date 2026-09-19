@@ -1,0 +1,104 @@
+@page "/setup/infrastructure"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = SetupAuthentication.AdminPolicy)]
+@using Aetheric.Provisioning.Components
+@using Aetheric.Provisioning.Application
+@using Aetheric.Provisioning.Engine
+@using Microsoft.AspNetCore.Components.Forms
+@inject InfrastructureSetup Setup
+@inject NavigationManager Navigation
+
+<PageTitle>Connect your infrastructure</PageTitle>
+<main class="aetheric-provisioning setup-shell infrastructure-shell" data-infrastructure>
+    <header><span class="eyebrow">AETHERIC FORGE / PROVISIONING</span><span class="badge">Final setup step</span></header>
+    <h1>Connect your infrastructure.</h1>
+    <p class="lede">Add administrator access for each service, test the connections, then finish setting up your Forge.</p>
+    @if (_error is not null)
+    {
+        <p role="alert" class="setup-error">@_error</p>
+        <a href="/setup">Sign in again to resume</a>
+    }
+    else
+    {
+        @foreach (var card in _cards)
+        {
+            <section class="setup-card" aria-labelledby="@(card.System + "-heading")">
+                <h2 id="@(card.System + "-heading")">@card.Title</h2>
+                <form method="post" action="/setup/infrastructure/test" data-service="@card.System">
+                    <AntiforgeryToken />
+                    <input type="hidden" name="system" value="@card.System" />
+                    <fieldset disabled>
+                        <legend class="visually-hidden">@card.Title connection</legend>
+                        <div class="infrastructure-fields">
+                            @if (card.System == "rabbitmq")
+                            {
+                                <div class="wide-field"><label for="rabbitmq-url">Management API base URL</label><input id="rabbitmq-url" name="url" type="url" value="@card.Url" placeholder="http://rabbitmq.example:15672" required maxlength="1000" /><p class="muted">Use the management endpoint, usually port 15672.</p></div>
+                            }
+                            else
+                            {
+                                <div><label for="@(card.System + "-host")">Host</label><input id="@(card.System + "-host")" name="host" value="@card.Host" required maxlength="253" autocomplete="off" /></div>
+                                <div><label for="@(card.System + "-port")">Port</label><input id="@(card.System + "-port")" name="port" type="number" value="@card.Port" min="1" max="65535" required /></div>
+                            }
+                            <div><label for="@(card.System + "-username")">@(card.System == "redis" ? "ACL username (optional)" : "Administrator username")</label><input id="@(card.System + "-username")" name="username" value="@card.Username" autocomplete="off" required="@(card.System != "redis")" maxlength="200" /></div>
+                            <div>
+                                <label for="@(card.System + "-password")">Password</label>
+                                <input id="@(card.System + "-password")" name="password" type="password" autocomplete="new-password" required="@(!card.HasPassword)" disabled="@card.HasPassword" maxlength="4096" />
+                                <button type="button" class="secondary reveal-password" aria-controls="@(card.System + "-password")" aria-pressed="false">Show password</button>
+                                @if (card.HasPassword)
+                                {
+                                    <label class="check-label"><input type="checkbox" name="keepPassword" value="true" checked /> Keep saved password</label>
+                                }
+                            </div>
+                            @if (card.System == "postgres")
+                            {
+                                <div><label for="postgres-database">Connection database</label><input id="postgres-database" name="database" value="@card.Database" required maxlength="128" /></div>
+                            }
+                            @if (card.System == "mongo")
+                            {
+                                <div><label for="mongo-auth-database">Authentication database</label><input id="mongo-auth-database" name="authDatabase" value="@card.Database" required maxlength="128" /></div>
+                                <div><label class="check-label"><input type="checkbox" name="directConnection" value="true" checked="@card.DirectConnection" /> Direct connection</label><p class="muted">Connect directly to this host instead of discovering other replica-set members.</p></div>
+                            }
+                        </div>
+                        <button type="submit" data-test>Test connection</button>
+                    </fieldset>
+                    <p class="connection-result" role="status" aria-live="polite">@(card.HasPassword ? "Saved connection. Test it again to continue." : "Not tested")</p>
+                </form>
+            </section>
+        }
+        <section class="setup-card infrastructure-finish">
+            <p data-progress role="status">0 of 4 connections verified</p>
+            <button type="button" data-finish disabled>Save credentials and finish bootstrap</button>
+            <p data-save-result role="status" aria-live="polite"></p>
+            <p class="muted">Credentials are encrypted when saved. Connection checks do not create databases, users, queues, or other resources.</p>
+        </section>
+        <noscript><p>Enable JavaScript to test and save these connections.</p></noscript>
+    }
+    <footer>Your administrator session lasts 20 minutes. Sign in again to resume saved progress.</footer>
+</main>
+
+@code {
+    private string? _error;
+    private readonly List<Card> _cards = [];
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var state = await Setup.StateAsync(default);
+            var saved = await Setup.SavedAsync(default);
+            if (state.Completed) { Navigation.NavigateTo("/setup/complete"); return; }
+            foreach (var system in InfrastructureConnections.Systems)
+            {
+                saved.TryGetValue(system, out var credential);
+                _cards.Add(new Card(system, system switch { "redis" => "Redis", "rabbitmq" => "RabbitMQ", "postgres" => "Postgres", _ => "MongoDB" },
+                    credential?.Host ?? "", credential?.Port ?? (system switch { "redis" => 6379, "rabbitmq" => 15672, "postgres" => 5432, _ => 27017 }),
+                    credential?.Username ?? "", credential is not null,
+                    credential?.Postgres?.Database ?? credential?.Mongo?.AuthDatabase ?? (system == "postgres" ? "postgres" : "admin"),
+                    credential?.Mongo?.DirectConnection ?? false,
+                    credential is not null && system == "rabbitmq" ? new UriBuilder(credential.RabbitMq!.Scheme, credential.Host, credential.Port, credential.RabbitMq.BasePath).Uri.AbsoluteUri : ""));
+            }
+        }
+        catch (NavigationException) { throw; }
+        catch (UnauthorizedAccessException) { _error = "Sign in again as your Forge administrator to continue."; }
+        catch (Exception) { _error = "Saved setup data could not be read. Check the bootstrap state, credential volume, and encryption key."; }
+    }
+    private sealed record Card(string System, string Title, string Host, int Port, string Username, bool HasPassword, string Database, bool DirectConnection, string Url);
+}

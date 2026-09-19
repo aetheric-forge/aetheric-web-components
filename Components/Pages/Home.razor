@@ -1,0 +1,205 @@
+@page "/simulation"
+@rendermode InteractiveServer
+@inject Aetheric.Provisioning.Application.ProvisioningReview Review
+@using System.Collections.Immutable
+@using Aetheric.Provisioning.Definitions
+
+<PageTitle>Aetheric Provisioning</PageTitle>
+<main class="aetheric-provisioning">
+    <header><span class="eyebrow">AETHERIC FORGE / PROVISIONING</span><span class="badge">M2 · Simulated execution</span></header>
+    <h1>From definition to deployment.</h1>
+    <p class="lede">Keep institutional purpose independent of the technology that serves it.</p>
+    <aside>Load a public definition, configure its deployment, and review the resulting plan. Execution and parent availability are simulated; no live resources are created.</aside>
+    <section aria-labelledby="source-heading">
+        <h2 id="source-heading">1. Load a definition</h2>
+        <p>Public GitHub repositories are supported. Both YAML files are read at the same resolved commit.</p>
+        <div class="form-grid">
+            <label>Repository URL<input id="repository" value="@_repository" @oninput="e => SourceChanged(() => _repository = Value(e))" disabled="@(_busy || !_interactive)" /></label>
+            <label>Branch, tag, or commit<input id="revision" value="@_revision" @oninput="e => SourceChanged(() => _revision = Value(e))" disabled="@(_busy || !_interactive)" /></label>
+            <label>Institution YAML path<input id="definition-path" value="@_definitionPath" @oninput="e => SourceChanged(() => _definitionPath = Value(e))" disabled="@(_busy || !_interactive)" /></label>
+            <label>Bindings YAML path<input id="bindings-path" value="@_bindingsPath" @oninput="e => SourceChanged(() => _bindingsPath = Value(e))" disabled="@(_busy || !_interactive)" /></label>
+        </div>
+        <div class="controls"><button id="load-git" @onclick="LoadGit" disabled="@(_busy || !_interactive)">@(_busy ? "Working…" : "Load from public GitHub")</button><button id="load-fixture" class="secondary" @onclick="LoadFixture" disabled="@(_busy || !_interactive)">Use bundled Decisions example</button></div>
+    </section>
+    @if (Review.Loaded is { } loaded)
+    {
+        <section class="summary">
+            <div><span>INSTITUTION</span><strong>@loaded.Name · @loaded.Requirements.Version</strong></div>
+            <div><span>RESOLVED COMMIT</span><strong><code>@loaded.Source.Definition.Provenance.Commit[..12]</code></strong></div>
+            <div><span>RESOURCES</span><strong>@loaded.Requirements.Resources.Count(r => r.Ownership == "owned") owned / @loaded.Requirements.Resources.Count(r => r.Ownership == "parent") inherited</strong></div>
+        </section>
+        <p>@loaded.Description</p>
+        <section aria-labelledby="configure-heading">
+            <h2 id="configure-heading">2. Configure the deployment</h2>
+            <p>These overrides change deployment bindings. The institution definition stays unchanged.</p>
+            <label>Deployment name<input id="environment" value="@_environment" @oninput="e => ConfigurationChanged(() => _environment = Value(e))" disabled="@(_busy || !_interactive)" /></label>
+            @foreach (var binding in _bindings)
+            {
+                <fieldset disabled="@(_busy || !_interactive)"><legend>Owned resource: @binding.Id</legend>
+                    <label>Provider<input value="@binding.Provider" @oninput="e => ConfigurationChanged(() => binding.Provider = Value(e))" /></label>
+                    <div class="form-grid">
+                    @foreach (var setting in binding.Settings)
+                    {
+                        <label>@setting.Key<input aria-label="@(binding.Id + " " + setting.Key)" value="@setting.Value" @oninput="e => ConfigurationChanged(() => setting.Value = Value(e))" /></label>
+                    }
+                    </div>
+                </fieldset>
+            }
+            <h3>Parent context</h3>
+            <p>Declare the capabilities supplied by a simulated parent. A resolution path alone does not prove live availability.</p>
+            <div class="form-grid">
+                <label>Parent identity<input id="parent-id" value="@_parentId" @oninput="e => ConfigurationChanged(() => _parentId = Value(e))" disabled="@(_busy || !_interactive)" /></label>
+                <label>Parent revision<input id="parent-revision" value="@_parentRevision" @oninput="e => ConfigurationChanged(() => _parentRevision = Value(e))" disabled="@(_busy || !_interactive)" /></label>
+            </div>
+            @foreach (var parent in _parents)
+            {
+                <fieldset disabled="@(_busy || !_interactive)"><legend>@parent.Contract</legend>
+                    <label>Resolution source<input aria-label="@(parent.Contract + " source")" value="@parent.Source" @oninput="e => ConfigurationChanged(() => parent.Source = Value(e))" /></label>
+                    <label><input type="checkbox" checked="@parent.Available" @onchange="e => ConfigurationChanged(() => parent.Available = e.Value is true)" /> Available in the simulated parent context</label>
+                </fieldset>
+            }
+            <button id="review-plan" @onclick="BuildPlan" disabled="@(_busy || !_interactive)">Review this configuration</button>
+        </section>
+    }
+    @if (!Review.Issues.IsEmpty)
+    {
+        <section class="issues" role="alert"><h2>Needs attention</h2><ul>
+        @foreach (var issue in Review.Issues) { <li><strong>@issue.Target</strong>: @issue.Message <small>(@issue.Code)</small></li> }
+        </ul></section>
+    }
+    @if (Review.Plan is { } plan)
+    {
+        <section aria-labelledby="plan-heading"><h2 id="plan-heading">3. Review and run</h2>
+            <div class="table-wrap"><table><thead><tr><th>Requirement</th><th>Ownership / action</th><th>Effective binding</th><th>Outcome</th></tr></thead><tbody>
+            @foreach (var step in plan.Steps)
+            {
+                <tr><td>@step.Target</td><td>@(step.Kind == StepKind.CheckParent ? "Check inherited capability" : "Provision owned workspace")</td>
+                <td>@if (step.Binding is { } binding) { <strong>@binding.Provider</strong><ul>@foreach (var setting in binding.Settings.OrderBy(x => x.Key)) { <li>@setting.Key: @setting.Value</li> }</ul> } else { @step.Source }</td>
+                <td>@(_outcomes.GetValueOrDefault(step.Id)?.Status.ToString() ?? "Ready")</td></tr>
+            }
+            @foreach (var inherited in plan.Input.Institution.Resources.Where(x => x.Ownership == "parent"))
+            {
+                <tr><td>@inherited.Name</td><td>Parent-owned · no creation action</td><td>Via inherited capabilities</td><td>Included in parent checks</td></tr>
+            }
+            </tbody></table></div>
+            <p class="muted">Declared fallbacks remain visible above. This simulation retains the selected Redis binding and never switches to in-memory staging on failure.</p>
+            <details><summary>Plan provenance</summary>
+                <p>Repository: @plan.Input.DefinitionSource.Repository</p><p>Definition: <code>@plan.Input.DefinitionSource.Path</code></p><p>Bindings: <code>@plan.Input.BindingsSource.Path</code></p>
+                <p>Commit: <code>@plan.Input.DefinitionSource.Commit</code></p><p>Plan: <code>@plan.Id</code></p>
+                <p>Parent: @plan.Input.Parent.Id / @plan.Input.Parent.Revision</p>
+            </details>
+            <div class="controls">
+                <label><input id="approve-plan" type="checkbox" checked="@Review.IsApproved" @onchange="Approve" disabled="@(_busy || !_interactive)" /> I have reviewed this plan for simulated execution.</label>
+                <button id="run-plan" @onclick="Run" disabled="@(_busy || !Review.IsApproved)">Run reviewed simulation</button>
+            </div>
+        </section>
+    }
+    <p role="status" aria-live="polite">@_status</p>
+    <footer><a href="/setup">Return to setup</a><p>Separate institution requirements, deployment bindings, and parent context. Live adapters follow in M3.</p></footer>
+</main>
+
+@code {
+    private string _repository = "https://github.com/aetheric-forge/adr-campus";
+    private string _revision = "main";
+    private string _definitionPath = "institution/decisions-institution.yaml";
+    private string _bindingsPath = "institution/decisions-institution.bindings.yaml";
+    private string _environment = "";
+    private string _parentId = "";
+    private string _parentRevision = "";
+    private string _status = "Load a definition from public GitHub or use the bundled example.";
+    private bool _busy;
+    private bool _interactive;
+    protected override void OnAfterRender(bool firstRender)
+    {
+        if (firstRender) { _interactive = true; StateHasChanged(); }
+    }
+    private readonly List<BindingEditor> _bindings = [];
+    private readonly List<ParentEditor> _parents = [];
+    private readonly Dictionary<string, StepOutcome> _outcomes = [];
+    private static string Value(ChangeEventArgs e) => e.Value?.ToString() ?? "";
+    private void SourceChanged(Action change)
+    {
+        change(); Review.ClearSource(); _outcomes.Clear();
+        _status = "Source changed. Load it again before reviewing.";
+    }
+    private void ConfigurationChanged(Action change)
+    {
+        change(); Review.InvalidateReview(); _outcomes.Clear();
+        _status = "Configuration changed. Review and approve the new plan before running.";
+    }
+    private async Task LoadGit()
+    {
+        _busy = true;
+        try { await Review.LoadAsync(new(_repository, _revision, _definitionPath, _bindingsPath)); InitializeEditors(false); }
+        catch { _status = "The source could not be loaded. Please retry."; }
+        finally { _busy = false; }
+    }
+    private void LoadFixture()
+    {
+        var source = BundledDecisionsSource.Load();
+        _repository = source.Definition.Provenance.Repository;
+        _revision = source.Definition.Provenance.Commit;
+        _definitionPath = source.Definition.Provenance.Path;
+        _bindingsPath = source.Bindings.Provenance.Path;
+        Review.LoadBundle(source); InitializeEditors(true);
+    }
+    private void InitializeEditors(bool bundled)
+    {
+        _bindings.Clear(); _parents.Clear(); _outcomes.Clear();
+        if (Review.Loaded is not { } loaded) { _status = "Resolve the source or validation issues above."; return; }
+        _environment = loaded.Bindings.Environment;
+        _parentId = bundled ? "simulated-campus" : "";
+        _parentRevision = bundled ? "1" : "";
+        foreach (var resource in loaded.Requirements.Resources.Where(x => x.Ownership == "owned"))
+        {
+            loaded.Bindings.Resources.TryGetValue(resource.Id, out var binding);
+            _bindings.Add(new() { Id = resource.Id, Provider = binding?.Provider ?? "", Settings = binding?.Settings.OrderBy(x => x.Key)
+                .Select(x => new SettingEditor { Key = x.Key, Value = x.Value }).ToList() ?? [] });
+        }
+        foreach (var contract in loaded.Requirements.ParentContracts)
+            _parents.Add(new() { Contract = contract, Source = loaded.Bindings.ParentSources.GetValueOrDefault(contract) ?? "", Available = bundled });
+        _status = bundled ? "Bundled definition loaded with an explicit simulated parent. Review the configuration."
+            : "Source pinned. Configure the deployment and simulated parent before review.";
+    }
+    private void BuildPlan()
+    {
+        if (Review.Loaded is not { } loaded) return;
+        var bindings = loaded.Bindings with
+        {
+            Environment = _environment,
+            Resources = _bindings.ToImmutableDictionary(x => x.Id, x => new ResourceBinding(x.Provider,
+                x.Settings.ToImmutableDictionary(s => s.Key, s => s.Value), ImmutableDictionary<string, SecretReference>.Empty)),
+            ParentSources = _parents.ToImmutableDictionary(x => x.Contract, x => x.Source)
+        };
+        var parent = new ParentContext(_parentId, _parentRevision)
+            { Capabilities = _parents.Where(x => x.Available).ToImmutableDictionary(x => x.Contract, x => x.Source) };
+        Review.Configure(bindings, parent);
+        var result = Review.Review();
+        _status = result.IsValid ? "Review the effective settings and approve this exact plan to run the simulation." : "Resolve the highlighted issues before running.";
+    }
+    private void Approve(ChangeEventArgs e)
+    {
+        if (e.Value is true && Review.Plan is { } plan) Review.Approve(plan.Id);
+        else Review.RevokeApproval();
+    }
+    private async Task Run()
+    {
+        if (_busy) return;
+        _busy = true;
+        try
+        {
+            var result = await Review.ExecuteApprovedAsync();
+            if (result.Run is { } run)
+            {
+                foreach (var outcome in run.Outcomes) _outcomes[outcome.StepId] = outcome;
+                _status = run.Succeeded ? "Simulation complete. No live resources were created." : "Simulation incomplete. Parent checks or owned actions failed; inspect the outcomes before retrying.";
+            }
+            else _status = string.Join(" ", result.Issues.Select(x => x.Message));
+        }
+        catch { _status = "The simulation could not complete. Retry or reload to start a fresh session."; }
+        finally { _busy = false; }
+    }
+    private sealed class SettingEditor { public string Key { get; init; } = ""; public string Value { get; set; } = ""; }
+    private sealed class BindingEditor { public string Id { get; init; } = ""; public string Provider { get; set; } = ""; public List<SettingEditor> Settings { get; init; } = []; }
+    private sealed class ParentEditor { public string Contract { get; init; } = ""; public string Source { get; set; } = ""; public bool Available { get; set; } }
+}

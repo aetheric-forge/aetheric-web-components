@@ -1,0 +1,184 @@
+@page "/setup/administrator"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = SetupAuthentication.Policy)]
+@using System.ComponentModel.DataAnnotations
+@using Microsoft.AspNetCore.Components.Forms
+@using Aetheric.Provisioning.Components
+@using Aetheric.Provisioning.Application
+@using Aetheric.Provisioning.Registry
+@inject SetupBootstrap Bootstrap
+@inject BootstrapConnectionConfiguration Configuration
+
+<PageTitle>Choose your Forge administrator</PageTitle>
+<main class="aetheric-provisioning setup-shell">
+    <header><a class="eyebrow brand" href="/setup">AETHERIC FORGE / PROVISIONING</a><span class="badge">Connection verified</span></header>
+    <h1>Your Forge administrator.</h1>
+    @if (_state?.Phase == RegistryBootstrapPhase.AwaitingPrincipal)
+    {
+        <p class="lede">Use your existing Keycloak account or create a new account to administer your Forge.</p>
+        <section class="setup-card" aria-labelledby="existing-heading">
+            <h2 id="existing-heading">Use an existing account</h2>
+            <EditForm Model="Search" FormName="administrator-search" OnValidSubmit="FindExisting">
+                <DataAnnotationsValidator />
+                <label for="existing-username">Keycloak username</label>
+                <InputText id="existing-username" @bind-Value="Search!.Username" autocomplete="username" maxlength="200" />
+                <ValidationMessage For="() => Search!.Username" />
+                <button type="submit">Find account</button>
+            </EditForm>
+            @if (_candidate is not null)
+            {
+                <div role="status">
+                    <h3>@_candidate.DisplayName</h3>
+                    <dl class="connection-details">
+                        <dt>Username</dt><dd>@_candidate.Username</dd>
+                        <dt>Email</dt><dd>@(_candidate.Email ?? "Not provided")</dd>
+                        <dt>User ID</dt><dd><code>@_candidate.SubjectId</code></dd>
+                    </dl>
+                </div>
+                <p>This account will receive Forge administrator access. You’ll sign in with its existing credentials to finish setup.</p>
+            }
+            <EditForm Model="Selection" FormName="administrator-select" OnValidSubmit="SelectExisting">
+                <DataAnnotationsValidator />
+                <input type="hidden" name="Selection.SubjectId" value="@Selection!.SubjectId" />
+                @if (_candidate is not null)
+                {
+                    <button type="submit">Use this account as Forge administrator</button>
+                }
+            </EditForm>
+            @if (_lookupError is not null) { <p role="alert" class="setup-error">@_lookupError</p> }
+        </section>
+        <section class="setup-card">
+            <h2>Create a new account</h2>
+            <EditForm Model="Input" FormName="administrator-create" OnValidSubmit="Create">
+                <DataAnnotationsValidator />
+                <ValidationSummary />
+                <label for="username">Username</label>
+                <InputText id="username" @bind-Value="Input!.Username" autocomplete="username" maxlength="200" />
+                <label for="email">Email</label>
+                <InputText id="email" type="email" @bind-Value="Input!.Email" autocomplete="email" maxlength="254" />
+                <label for="first-name">First name</label>
+                <InputText id="first-name" @bind-Value="Input!.FirstName" autocomplete="given-name" maxlength="200" />
+                <label for="last-name">Last name</label>
+                <InputText id="last-name" @bind-Value="Input!.LastName" autocomplete="family-name" maxlength="200" />
+                <label for="password">Password</label>
+                <input id="password" name="Input.Password" type="password" autocomplete="new-password" required maxlength="4096" />
+                <label for="confirm-password">Confirm password</label>
+                <input id="confirm-password" name="Input.ConfirmPassword" type="password" autocomplete="new-password" required maxlength="4096" />
+                <p class="muted">Use a new username. Keycloak’s password policy applies. Your password is sent securely to Keycloak and isn’t saved by the provisioner.</p>
+                <button type="submit">Create Forge administrator</button>
+            </EditForm>
+        </section>
+    }
+    else if (_state?.Phase == RegistryBootstrapPhase.PrincipalSelected)
+    {
+        <section class="setup-card"><h2>Account selected</h2>
+            <p>The account is saved. Its administrator role still needs to be assigned.</p>
+            <EditForm Model="Input" FormName="administrator-resume" OnSubmit="Resume"><button type="submit">Retry administrator assignment</button></EditForm>
+        </section>
+    }
+    else if (_state?.Phase == RegistryBootstrapPhase.AuthorityAssigned)
+    {
+        <section class="setup-card"><h2>Your administrator is ready</h2>
+            <p>Sign in to Keycloak with the selected account to verify access and finish setup. Complete any profile or verification steps Keycloak requests.</p>
+            <p>User ID: <code>@_state.SubjectId</code></p>
+            <form method="post" action="/setup/administrator/signin"><AntiforgeryToken /><button type="submit">Sign in as your Forge administrator</button></form>
+        </section>
+    }
+    else if (_state?.Phase == RegistryBootstrapPhase.CreatingPrincipal)
+    {
+        <section class="setup-card"><h2>Account creation needs recovery</h2><p>Keycloak may have created the account, but the provisioner could not save its user ID. Have the deployment administrator check Keycloak and recover the bootstrap record before continuing.</p></section>
+    }
+    else if (_state?.Phase == RegistryBootstrapPhase.Completed)
+    {
+        <p>Administrator setup is complete.</p>
+    }
+    @if (_error is not null) { <p role="alert" class="setup-error">@_error</p> }
+    <form method="post" action="/setup/connection/end"><AntiforgeryToken /><div class="controls"><button class="secondary">End setup session</button></div></form>
+    <footer>Your setup session lasts 20 minutes. Reconnect with the client secret to resume saved progress.</footer>
+</main>
+
+@code {
+    [CascadingParameter] public HttpContext Context { get; set; } = default!;
+    [SupplyParameterFromForm(FormName = "administrator-create")] public AccountInput? Input { get; set; }
+    [SupplyParameterFromForm(FormName = "administrator-search")] public ExistingSearch? Search { get; set; }
+    [SupplyParameterFromForm(FormName = "administrator-select")] public ExistingSelection? Selection { get; set; }
+    private ExistingKeycloakAdministrator? _candidate;
+    private string? _lookupError;
+    private RegistryBootstrapState? _state;
+    private string? _error;
+    protected override async Task OnInitializedAsync()
+    {
+        Input ??= new();
+        Search ??= new();
+        Selection ??= new();
+        await Refresh();
+    }
+    private async Task Refresh()
+    {
+        try { _state = await Bootstrap.StateAsync(Context.RequestAborted); }
+        catch (Exception) { _error = "Bootstrap state is unavailable. Check the deployment’s initialized state directory."; }
+    }
+    private async Task Create()
+    {
+        try
+        {
+            await Bootstrap.CreateAsync(Context.User, new NewRegistryAdministrator
+            {
+                Username = Input!.Username, Email = Input.Email, FirstName = Input.FirstName,
+                LastName = Input.LastName, Password = Input.Password
+            }, Context.RequestAborted);
+        }
+        catch (RegistryAccountRejectedException ex)
+        {
+            _error = ex.Message == "registry.account_exists"
+                ? "That username or email already exists. Use Find account above to select your existing account, or choose a new username and email."
+                : "Keycloak rejected the account. Check the profile fields, password policy, and the client’s user-management permission.";
+        }
+        catch (OperationCanceledException) when (Context.RequestAborted.IsCancellationRequested) { }
+        catch (Exception) { _error = "Administrator setup could not finish. Saved progress is shown below; reconnect if your session expired."; }
+        finally { Input!.Password = Input.ConfirmPassword = ""; }
+        await Refresh();
+    }
+    private async Task FindExisting()
+    {
+        _candidate = null;
+        try
+        {
+            _candidate = await Bootstrap.FindExistingAsync(Context.User, Search!.Username.Trim(), Context.RequestAborted);
+            if (_candidate is null) _lookupError = "No account matched that username in this realm.";
+            else Selection!.SubjectId = _candidate.SubjectId;
+        }
+        catch (OperationCanceledException) when (Context.RequestAborted.IsCancellationRequested) { }
+        catch (Exception) { _lookupError = "The account could not be verified. Check the username and that the account is enabled, or reconnect if your setup session expired."; }
+    }
+    private async Task SelectExisting()
+    {
+        try { await Bootstrap.SelectExistingAsync(Context.User, Selection!.SubjectId, Context.RequestAborted); }
+        catch (OperationCanceledException) when (Context.RequestAborted.IsCancellationRequested) { }
+        catch (Exception) { _error = "The account could not be assigned. Check that it is still enabled, or reconnect if your session expired. Saved progress is shown on this page."; }
+        await Refresh();
+    }
+    public sealed class ExistingSearch
+    {
+        [Required, StringLength(200)] public string Username { get; set; } = "";
+    }
+    public sealed class ExistingSelection
+    {
+        [Required, StringLength(200), RegularExpression(@"[A-Za-z0-9._:@-]+")]
+        public string SubjectId { get; set; } = "";
+    }
+    private async Task Resume()
+    {
+        try { await Bootstrap.ResumeAsync(Context.User, Context.RequestAborted); }
+        catch (Exception) { _error = "The administrator role could not be assigned. Check Keycloak access, or reconnect if your setup session expired."; }
+        await Refresh();
+    }
+    public sealed class AccountInput
+    {
+        [Required, StringLength(200)] public string Username { get; set; } = "";
+        [Required, EmailAddress, StringLength(254)] public string Email { get; set; } = "";
+        [Required, StringLength(200)] public string FirstName { get; set; } = "";
+        [Required, StringLength(200)] public string LastName { get; set; } = "";
+        [Required, StringLength(4096)] public string Password { get; set; } = "";
+        [Required, Compare(nameof(Password), ErrorMessage = "Passwords must match.")] public string ConfirmPassword { get; set; } = "";
+    }
+}

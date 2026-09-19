@@ -1,0 +1,12 @@
+@page "/setup/resume"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = SetupAuthentication.ResumePolicy)]
+@using Aetheric.Provisioning.Components
+@using Microsoft.AspNetCore.Components.Forms
+<PageTitle>Resume infrastructure setup</PageTitle>
+<main class="aetheric-provisioning setup-shell">
+    <header><span class="eyebrow">AETHERIC FORGE / PROVISIONING</span><span class="badge">Administrator already selected</span></header>
+    <h1>Resume your setup.</h1>
+    <p class="lede">Sign in with your existing Forge administrator to continue connecting your infrastructure.</p>
+    <p>Your saved service credentials will be available after sign-in.</p>
+    <form method="post" action="/setup/administrator/signin"><AntiforgeryToken /><button type="submit">Sign in and continue</button></form>
+</main>
