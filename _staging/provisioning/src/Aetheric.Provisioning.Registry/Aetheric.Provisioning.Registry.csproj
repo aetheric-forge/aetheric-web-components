@@ -1,7 +1,0 @@
-<Project Sdk="Microsoft.NET.Sdk">
-  <ItemGroup>
-    <ProjectReference Include="../Aetheric.Provisioning.Application/Aetheric.Provisioning.Application.csproj" />
-    <ProjectReference Include="../../external/runtime/src/Providers/AethericForge.Runtime.Providers.Identity.Keycloak/AethericForge.Runtime.Providers.Identity.Keycloak.csproj" />
-    <InternalsVisibleTo Include="Aetheric.Provisioning.Tests" />
-  </ItemGroup>
-</Project>

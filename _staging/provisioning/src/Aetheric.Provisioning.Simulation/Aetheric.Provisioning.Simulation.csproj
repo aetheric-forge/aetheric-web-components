@@ -1,7 +1,0 @@
-<Project Sdk="Microsoft.NET.Sdk">
-  <ItemGroup>
-    <ProjectReference Include="../Aetheric.Provisioning.Engine/Aetheric.Provisioning.Engine.csproj" />
-    <ProjectReference Include="../Aetheric.Provisioning.Definitions/Aetheric.Provisioning.Definitions.csproj" />
-    <EmbeddedResource Include="../../fixtures/decisions/*.yaml" />
-  </ItemGroup>
-</Project>
