@@ -1,21 +1,15 @@
 <Project Sdk="Microsoft.NET.Sdk.Razor">
   <!--
-    ProvisioningRoot defaults to this repo's own provisioning submodule, for standalone builds.
-    A host that already has aetheric-provisioning checked out natively (e.g. aetheric-provisioning's
-    own sample host, which references this project directly rather than through this repo's
-    submodule) should override it via AdditionalProperties on its ProjectReference to point at that
-    native checkout instead - otherwise the build pulls in a second, independently-built copy of
-    Application/Engine/Registry/Simulation alongside the host's own, which are different assemblies
-    despite identical source and will not satisfy each other's types at DI-resolution time.
+    aetheric-provisioning's engine now lives inside aetheric-runtime (src/Provisioning/), reached
+    here through the runtime submodule. No override property is needed anymore - this repo's own
+    sample host (samples/Aetheric.Provisioning.Web) references this project directly as a sibling,
+    so there's only ever one copy of these assemblies within this repo's build graph.
   -->
-  <PropertyGroup>
-    <ProvisioningRoot Condition="'$(ProvisioningRoot)' == ''">../../provisioning</ProvisioningRoot>
-  </PropertyGroup>
   <ItemGroup><FrameworkReference Include="Microsoft.AspNetCore.App" /></ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="$(ProvisioningRoot)/src/Aetheric.Provisioning.Simulation/Aetheric.Provisioning.Simulation.csproj" />
-    <ProjectReference Include="$(ProvisioningRoot)/src/Aetheric.Provisioning.Application/Aetheric.Provisioning.Application.csproj" />
-    <ProjectReference Include="$(ProvisioningRoot)/src/Aetheric.Provisioning.Registry/Aetheric.Provisioning.Registry.csproj" />
+    <ProjectReference Include="../../runtime/src/Provisioning/Aetheric.Provisioning.Simulation/Aetheric.Provisioning.Simulation.csproj" />
+    <ProjectReference Include="../../runtime/src/Provisioning/Aetheric.Provisioning.Application/Aetheric.Provisioning.Application.csproj" />
+    <ProjectReference Include="../../runtime/src/Provisioning/Aetheric.Provisioning.Registry/Aetheric.Provisioning.Registry.csproj" />
   </ItemGroup>
   <ItemGroup><PackageReference Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" Version="10.0.12" /></ItemGroup>
 </Project>

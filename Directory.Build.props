@@ -3,6 +3,14 @@
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+  <!--
+    Directory.Build.props resolution doesn't stop at submodule boundaries - without this
+    exclusion, TreatWarningsAsErrors/RestorePackagesWithLockFile also apply to every project
+    reached through the runtime submodule, which doesn't opt into either and turns its own
+    pre-existing warnings into build failures here (and forces lock files it doesn't have).
+  -->
+  <PropertyGroup Condition="!$(MSBuildProjectFullPath.StartsWith('$(MSBuildThisFileDirectory)runtime'))">
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
   </PropertyGroup>

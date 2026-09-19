@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <ItemGroup>
+    <ProjectReference Include="../../src/Aetheric.Provisioning.Components/Aetheric.Provisioning.Components.csproj" />
+    <ProjectReference Include="../../runtime/src/Provisioning/Aetheric.Provisioning.Persistence/Aetheric.Provisioning.Persistence.csproj" />
+    <ProjectReference Include="../../runtime/src/Provisioning/Aetheric.Provisioning.Infrastructure/Aetheric.Provisioning.Infrastructure.csproj" />
+  </ItemGroup>
+</Project>
