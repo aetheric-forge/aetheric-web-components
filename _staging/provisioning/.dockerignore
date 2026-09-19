@@ -1,0 +1,14 @@
+**/.git
+**/bin
+**/obj
+**/TestResults
+**/.vs
+**/.idea
+**/.env
+**/.env.*
+**/*.user
+**/*.pfx
+**/*.p12
+**/*.pem
+**/*.key
+.browser-tools

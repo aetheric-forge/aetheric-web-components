@@ -1,0 +1,22 @@
+services:
+  redis:
+    image: redis:7-alpine
+    command: [redis-server, --requirepass, integration-secret]
+    ports: ["127.0.0.1:16379:6379"]
+  rabbitmq:
+    image: rabbitmq:4-management-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: root
+      RABBITMQ_DEFAULT_PASS: integration-secret
+    ports: ["127.0.0.1:15673:15672"]
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_PASSWORD: integration-secret
+    ports: ["127.0.0.1:15432:5432"]
+  mongo:
+    image: mongo:8
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: integration-secret
+    ports: ["127.0.0.1:17017:27017"]

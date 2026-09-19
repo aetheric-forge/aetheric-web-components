@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <ItemGroup>
+    <!--
+      ProvisioningRoot=../../../.. (relative to Aetheric.Provisioning.Components.csproj's own
+      directory) points its Application/Engine/Registry/Simulation references at this repo's own
+      native src/ instead of the web-components submodule's nested provisioning submodule - without
+      this, the build pulls in two independently-built copies of those assemblies, which don't
+      satisfy each other's types at DI-resolution time despite identical source.
+    -->
+    <ProjectReference Include="../../external/web-components/src/Aetheric.Provisioning.Components/Aetheric.Provisioning.Components.csproj">
+      <AdditionalProperties>ProvisioningRoot=../../../..</AdditionalProperties>
+    </ProjectReference>
+    <ProjectReference Include="../../src/Aetheric.Provisioning.Persistence/Aetheric.Provisioning.Persistence.csproj" />
+    <ProjectReference Include="../../src/Aetheric.Provisioning.Infrastructure/Aetheric.Provisioning.Infrastructure.csproj" />
+  </ItemGroup>
+</Project>

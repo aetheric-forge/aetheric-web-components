@@ -1,0 +1,7 @@
+<Project>
+  <!-- Keep upstream project settings separate; store reproducible locks outside the submodule. -->
+  <PropertyGroup>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <NuGetLockFilePath>$(MSBuildThisFileDirectory)locks/$(MSBuildProjectName).packages.lock.json</NuGetLockFilePath>
+  </PropertyGroup>
+</Project>

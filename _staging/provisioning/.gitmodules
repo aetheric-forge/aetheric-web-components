@@ -1,0 +1,6 @@
+[submodule "external/runtime"]
+	path = external/runtime
+	url = https://github.com/aetheric-forge/aetheric-runtime.git
+[submodule "external/web-components"]
+	path = external/web-components
+	url = git@github.com:aetheric-forge/aetheric-web-components.git

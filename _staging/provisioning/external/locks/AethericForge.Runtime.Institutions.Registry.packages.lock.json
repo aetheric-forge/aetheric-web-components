@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "dependencies": {
+    "net10.0": {
+      "Microsoft.Extensions.DependencyInjection": {
+        "type": "Transitive",
+        "resolved": "10.0.10",
+        "contentHash": "ANyvsgkNBRvcJh2XLgn8veGmajf+8m0AbKK+HPWdRL1yraSNVVSmQhFntLtdz/C795jxqqup+k05cs/3jZQPOA==",
+        "dependencies": {
+          "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.10"
+        }
+      },
+      "Microsoft.Extensions.DependencyInjection.Abstractions": {
+        "type": "Transitive",
+        "resolved": "10.0.10",
+        "contentHash": "z/2xXlFw2aLGjHyEm6E0tQ+In6VfzQzTrtArbQ2c0TQE16ZbyDCMGPvaUT9I0s8rgy9sRWlU2P9waW37qV04qA=="
+      },
+      "aethericforge.runtime.abstractions.interfaces": {
+        "type": "Project",
+        "dependencies": {
+          "AethericForge.Runtime.Institutions.Abstractions": "[1.0.0, )"
+        }
+      },
+      "aethericforge.runtime.institutions.abstractions": {
+        "type": "Project",
+        "dependencies": {
+          "Microsoft.Extensions.DependencyInjection": "[10.0.10, )"
+        }
+      },
+      "aethericforge.runtime.models": {
+        "type": "Project",
+        "dependencies": {
+          "AethericForge.Runtime.Abstractions.Interfaces": "[1.0.0, )"
+        }
+      },
+      "aethericforge.runtime.services.identity": {
+        "type": "Project",
+        "dependencies": {
+          "AethericForge.Runtime.Abstractions.Interfaces": "[1.0.0, )",
+          "AethericForge.Runtime.Models": "[1.0.0, )"
+        }
+      },
+      "aethericforge.runtime.services.registry": {
+        "type": "Project",
+        "dependencies": {
+          "AethericForge.Runtime.Abstractions.Interfaces": "[1.0.0, )",
+          "AethericForge.Runtime.Models": "[1.0.0, )",
+          "AethericForge.Runtime.Services.Identity": "[1.0.0, )"
+        }
+      }
+    }
+  }
+}

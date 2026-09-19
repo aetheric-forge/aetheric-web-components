@@ -1,0 +1,4 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><OutputType>Exe</OutputType></PropertyGroup>
+  <ItemGroup><ProjectReference Include="../../src/Aetheric.Provisioning.Workbench.Redis/Aetheric.Provisioning.Workbench.Redis.csproj" /></ItemGroup>
+</Project>

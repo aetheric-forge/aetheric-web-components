@@ -1,0 +1,3 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup><ProjectReference Include="../Aetheric.Provisioning.Definitions/Aetheric.Provisioning.Definitions.csproj" /></ItemGroup>
+</Project>

@@ -1,0 +1,182 @@
+# Institution definition for the Decisions Office - WHAT it is, not how it runs.
+#
+# Shaped 1:1 against AethericForge.Runtime.Institutions.Abstractions.Primitives.IInstitutionTemplate
+# (descriptor / domains / organizations / roles / capabilities / resources / workflows / policies /
+# initialState). There is no YAML loader in aetheric-runtime today - this is a plain data artifact for
+# your provisioner. If aetheric-runtime should consume this format directly later, the natural next step
+# is a small deserializer that walks this document and calls InstitutionTemplateBuilder, the same builder
+# DecisionsInstitutionFactory.Template already uses in code.
+#
+# Per runtime/docs/specs/institution.md §7/§10 ("the runtime determines how capabilities are realized" /
+# "the Institution SHALL NOT prescribe execution mechanisms"), this file stays technology-agnostic on
+# purpose: contract names, resource categories, and ownership only - no providers, connection strings, or
+# ambient-resolution paths. Those belong in a sibling bindings file (decisions-institution.bindings.yaml)
+# for a specific deployment.
+#
+# Every entry has a stable `id` slug alongside its human-readable `name`. Cross-references
+# (requiredCapabilities, role capabilities, and the bindings file's keys) use the id, never the name, so
+# renaming a display name never breaks a reference.
+#
+# A Decisions Office is not sovereign (see runtime/docs/architecture/institutional-model.md): it does not own an
+# Archive, Library, Post Office, or Registrar of its own. It expects those four to already be available
+# from whatever parent Institution it is mounted under, and resolves them ambiently rather than
+# provisioning them itself. The `dependencies` block below records that expectation as contract names
+# only; it isn't a field IInstitutionTemplate defines, so a loader can either honor it or ignore it.
+
+descriptor:
+  id: decisions
+  name: Decisions
+  version: 1.0.0
+  description: >-
+    An ADR-style decision-record office: drafts, proposes, reviews, records, and supersedes the
+    architectural decisions made within its owning Institution.
+
+# Capabilities this Institution requires from its parent scope but does not itself provide. Grounded in
+# what adr-campus actually leans on today (see ForgeCampusExtensions.AddForgeCampus): a Campus-required
+# Archive and Library for durable decision records, a Post Office for maintenance/dispatch, and a
+# Registrar for authoritative identity. Unlike these four, the Workbench used for draft staging IS owned
+# by Decisions itself (see resources.draft-workspace below) - it's private working state, not shared
+# Campus infrastructure. Contract names are C# interface identifiers, already stable, so there's no
+# separate id/name split here.
+dependencies:
+  - contract: IArchive
+    reason: Durable storage for accepted/rejected/superseded decision records.
+  - contract: ILibrary
+    reason: Curated discovery surface over shared decision records.
+  - contract: IPostOffice
+    reason: Dispatch of maintenance commands (e.g. expired-draft purge).
+  - contract: IRegistrar
+    reason: Authoritative membership/identity backing member and maintainer roles.
+
+domains:
+  - id: drafting
+    name: Drafting
+    description: Preparing and revising an architectural decision before it is proposed for review.
+    requiredCapabilities:
+      - draft-decision
+      - revise-draft
+  - id: proposal-review
+    name: Proposal & Review
+    description: Submitting a draft for organizational consideration and deciding its outcome.
+    requiredCapabilities:
+      - propose-decision
+      - review-and-decide
+  - id: discovery
+    name: Discovery
+    description: Finding and understanding the office's current and historical decision record.
+    requiredCapabilities:
+      - discover-decisions
+  - id: supersession
+    name: Supersession
+    description: Replacing an accepted decision with a later one while preserving its history.
+    requiredCapabilities:
+      - supersede-decision
+  - id: administration
+    name: Administration
+    description: Mapping the office onto its authoritative membership source and its ADR-specific upkeep.
+    requiredCapabilities:
+      - administer-office
+
+organizations:
+  - id: decisions-office
+    name: Decisions Office
+    description: >-
+      The operational body that carries out drafting, review, and record-keeping for this Institution's
+      architectural decisions. See runtime/docs/specs/institution.md §5 - an Organization here derives its
+      authority from the owning Institution rather than existing sovereignly.
+
+roles:
+  - id: member
+    name: Member
+    description: >-
+      Can read the office's decision record, create a draft, revise a draft they authored, and propose
+      that draft for review.
+    capabilities:
+      - draft-decision
+      - revise-draft
+      - propose-decision
+      - discover-decisions
+  - id: maintainer
+    name: Maintainer
+    description: >-
+      Has all Member capabilities and can additionally accept or reject a proposed decision, and
+      administer the office's ADR-specific consequences of membership changes (e.g. recovering drafts
+      whose authors have left).
+    capabilities:
+      - draft-decision
+      - revise-draft
+      - propose-decision
+      - discover-decisions
+      - review-and-decide
+      - supersede-decision
+      - administer-office
+
+capabilities:
+  - id: draft-decision
+    name: Draft Decision
+    description: Create a new decision draft, capturing its context, decision, and consequences.
+  - id: revise-draft
+    name: Revise Draft
+    description: Revise a draft's content prior to it being proposed.
+  - id: propose-decision
+    name: Propose Decision
+    description: Submit a complete draft for organizational review.
+  - id: review-and-decide
+    name: Review and Decide
+    description: Accept or reject a proposed decision, recording who decided and why.
+  - id: discover-decisions
+    name: Discover Decisions
+    description: Browse and search the office's current and historical decision record.
+  - id: supersede-decision
+    name: Supersede Decision
+    description: Propose and, on acceptance, link a replacement for a previously accepted decision.
+  - id: administer-office
+    name: Administer Office
+    description: >-
+      Map the office onto its authoritative member/maintainer source and perform ADR-specific
+      maintenance (e.g. expired-draft recovery).
+
+resources:
+  - id: draft-workspace
+    name: Draft Workspace
+    type: staging
+    ownership: owned
+    description: >-
+      In-progress decision drafts. Private working state until proposed, not shared Campus
+      infrastructure.
+  - id: decision-record
+    name: Decision Record
+    type: knowledge
+    ownership: parent
+    description: >-
+      The durable, shared record of proposed, accepted, rejected, and superseded decisions.
+
+workflows:
+  - id: draft-to-proposal
+    name: Draft to Proposal
+    description: A Member drafts, optionally revises, and then proposes a decision for review.
+  - id: proposal-review
+    name: Proposal Review
+    description: A Maintainer reviews a proposed decision and accepts or rejects it.
+  - id: supersession
+    name: Supersession
+    description: >-
+      A later accepted decision is linked as the replacement for an earlier accepted decision, which
+      moves to Superseded without being rewritten.
+
+policies:
+  - id: active-member-only
+    name: Active Member Only
+    description: Only an active Member of the owning Institution may draft, revise, or propose a decision.
+  - id: active-maintainer-only
+    name: Active Maintainer Only
+    description: Only an active Maintainer of the owning Institution may accept or reject a proposal.
+  - id: immutable-accepted-record
+    name: Immutable Accepted Record
+    description: >-
+      An accepted decision is never rewritten to alter history; material change happens only through a
+      new decision that supersedes it.
+
+initialState:
+  configuration:
+    draftExpiryDays: 90
