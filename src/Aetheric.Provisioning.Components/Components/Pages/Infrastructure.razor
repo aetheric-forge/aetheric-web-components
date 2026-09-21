@@ -33,14 +33,22 @@
                             {
                                 <div class="wide-field"><label for="rabbitmq-url">Management API base URL</label><input id="rabbitmq-url" name="url" type="url" value="@card.Url" placeholder="http://rabbitmq.example:15672" required maxlength="1000" /><p class="muted">Use the management endpoint, usually port 15672.</p></div>
                             }
+                            else if (card.System == "keycloak")
+                            {
+                                <div class="wide-field"><label for="keycloak-url">Authority base URL</label><input id="keycloak-url" name="url" type="url" value="@card.Url" placeholder="https://sso.example.com" required maxlength="1000" /><p class="muted">The Keycloak server's own base URL, not a specific realm.</p></div>
+                            }
+                            else if (card.System == "s3")
+                            {
+                                <div class="wide-field"><label for="s3-url">Service endpoint URL</label><input id="s3-url" name="url" type="url" value="@card.Url" placeholder="https://s3.example.com:9000" required maxlength="1000" /><p class="muted">The S3-compatible (e.g. MinIO) service endpoint.</p></div>
+                            }
                             else
                             {
                                 <div><label for="@(card.System + "-host")">Host</label><input id="@(card.System + "-host")" name="host" value="@card.Host" required maxlength="253" autocomplete="off" /></div>
                                 <div><label for="@(card.System + "-port")">Port</label><input id="@(card.System + "-port")" name="port" type="number" value="@card.Port" min="1" max="65535" required /></div>
                             }
-                            <div><label for="@(card.System + "-username")">@(card.System == "redis" ? "ACL username (optional)" : "Administrator username")</label><input id="@(card.System + "-username")" name="username" value="@card.Username" autocomplete="off" required="@(card.System != "redis")" maxlength="200" /></div>
+                            <div><label for="@(card.System + "-username")">@(card.System == "redis" ? "ACL username (optional)" : card.System == "s3" ? "Access key" : "Administrator username")</label><input id="@(card.System + "-username")" name="username" value="@card.Username" autocomplete="off" required="@(card.System != "redis")" maxlength="200" /></div>
                             <div>
-                                <label for="@(card.System + "-password")">Password</label>
+                                <label for="@(card.System + "-password")">@(card.System == "s3" ? "Secret key" : "Password")</label>
                                 <input id="@(card.System + "-password")" name="password" type="password" autocomplete="new-password" required="@(!card.HasPassword)" disabled="@card.HasPassword" maxlength="4096" />
                                 <button type="button" class="secondary reveal-password" aria-controls="@(card.System + "-password")" aria-pressed="false">Show password</button>
                                 @if (card.HasPassword)
@@ -57,6 +65,16 @@
                                 <div><label for="mongo-auth-database">Authentication database</label><input id="mongo-auth-database" name="authDatabase" value="@card.Database" required maxlength="128" /></div>
                                 <div><label class="check-label"><input type="checkbox" name="directConnection" value="true" checked="@card.DirectConnection" /> Direct connection</label><p class="muted">Connect directly to this host instead of discovering other replica-set members.</p></div>
                             }
+                            @if (card.System == "keycloak")
+                            {
+                                <div><label for="keycloak-realm">Token realm</label><input id="keycloak-realm" name="realm" value="@(string.IsNullOrEmpty(card.Database) ? "master" : card.Database)" required maxlength="36" /><p class="muted">The realm this account authenticates against - usually "master".</p></div>
+                                <div><label for="keycloak-client">Client ID</label><input id="keycloak-client" name="clientId" value="@(string.IsNullOrEmpty(card.ClientId) ? "admin-cli" : card.ClientId)" required maxlength="200" /></div>
+                            }
+                            @if (card.System == "s3")
+                            {
+                                <div><label for="s3-region">Region <span>(optional)</span></label><input id="s3-region" name="region" value="@card.Database" maxlength="100" /></div>
+                                <div><label class="check-label"><input type="checkbox" name="forcePathStyle" value="true" checked="@card.DirectConnection" /> Path-style addressing</label><p class="muted">Required by most self-hosted S3-compatible services (e.g. MinIO).</p></div>
+                            }
                         </div>
                         <button type="submit" data-test>Test connection</button>
                     </fieldset>
@@ -65,7 +83,7 @@
             </section>
         }
         <section class="setup-card infrastructure-finish">
-            <p data-progress role="status">0 of 4 connections verified</p>
+            <p data-progress role="status">0 of @InfrastructureConnections.Systems.Length connections verified</p>
             <button type="button" data-finish disabled>Save credentials and finish bootstrap</button>
             <p data-save-result role="status" aria-live="polite"></p>
             <p class="muted">Credentials are encrypted when saved. Connection checks do not create databases, users, queues, or other resources.</p>
@@ -88,17 +106,30 @@
             foreach (var system in InfrastructureConnections.Systems)
             {
                 saved.TryGetValue(system, out var credential);
-                _cards.Add(new Card(system, system switch { "redis" => "Redis", "rabbitmq" => "RabbitMQ", "postgres" => "Postgres", _ => "MongoDB" },
-                    credential?.Host ?? "", credential?.Port ?? (system switch { "redis" => 6379, "rabbitmq" => 15672, "postgres" => 5432, _ => 27017 }),
+                var url = system switch
+                {
+                    "rabbitmq" when credential is not null =>
+                        new UriBuilder(credential.RabbitMq!.Scheme, credential.Host, credential.Port, credential.RabbitMq.BasePath).Uri.AbsoluteUri,
+                    "keycloak" when credential is not null =>
+                        new UriBuilder(credential.Keycloak!.Scheme, credential.Host, credential.Port, credential.Keycloak.BasePath).Uri.AbsoluteUri,
+                    "s3" when credential is not null =>
+                        new UriBuilder(credential.S3!.Scheme, credential.Host, credential.Port).Uri.AbsoluteUri,
+                    _ => ""
+                };
+                _cards.Add(new Card(system,
+                    system switch { "redis" => "Redis", "rabbitmq" => "RabbitMQ", "postgres" => "Postgres", "mongo" => "MongoDB", "keycloak" => "Keycloak", _ => "S3" },
+                    credential?.Host ?? "",
+                    credential?.Port ?? (system switch { "redis" => 6379, "rabbitmq" => 15672, "postgres" => 5432, "mongo" => 27017, "keycloak" => 8080, _ => 9000 }),
                     credential?.Username ?? "", credential is not null,
-                    credential?.Postgres?.Database ?? credential?.Mongo?.AuthDatabase ?? (system == "postgres" ? "postgres" : "admin"),
-                    credential?.Mongo?.DirectConnection ?? false,
-                    credential is not null && system == "rabbitmq" ? new UriBuilder(credential.RabbitMq!.Scheme, credential.Host, credential.Port, credential.RabbitMq.BasePath).Uri.AbsoluteUri : ""));
+                    credential?.Postgres?.Database ?? credential?.Mongo?.AuthDatabase ?? credential?.Keycloak?.Realm ?? credential?.S3?.Region
+                        ?? (system == "postgres" ? "postgres" : system == "keycloak" ? "master" : "admin"),
+                    credential?.Mongo?.DirectConnection ?? credential?.S3?.ForcePathStyle ?? true,
+                    url, credential?.Keycloak?.ClientId ?? ""));
             }
         }
         catch (NavigationException) { throw; }
         catch (UnauthorizedAccessException) { _error = "Sign in again as your Forge administrator to continue."; }
         catch (Exception) { _error = "Saved setup data could not be read. Check the bootstrap state, credential volume, and encryption key."; }
     }
-    private sealed record Card(string System, string Title, string Host, int Port, string Username, bool HasPassword, string Database, bool DirectConnection, string Url);
+    private sealed record Card(string System, string Title, string Host, int Port, string Username, bool HasPassword, string Database, bool DirectConnection, string Url, string ClientId);
 }
