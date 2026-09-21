@@ -1,10 +1,10 @@
 function initialize() {
     const root = document.querySelector('[data-infrastructure]');
     if (!root || root.dataset.initialized) return;
-    root.dataset.initialized = 'true';
     const forms = [...root.querySelectorAll('form[data-service]')];
     const finish = root.querySelector('[data-finish]');
     if (!finish || forms.length === 0) return;
+    root.dataset.initialized = 'true';
     const receipts = new Map();
     const revisions = new Map();
     const busy = new Set();

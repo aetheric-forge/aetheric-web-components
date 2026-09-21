@@ -42,38 +42,26 @@ public static class InfrastructureEndpoints
         var host = Value("host").Trim();
         _ = int.TryParse(Value("port"), out var port);
         RabbitMqRootOptions? rabbit = null;
-        if (system == "rabbitmq")
-        {
-            if (!Uri.TryCreate(Value("url").Trim(), UriKind.Absolute, out var uri) || uri.Scheme is not ("http" or "https")
-                || uri.UserInfo.Length != 0 || uri.Query.Length != 0 || uri.Fragment.Length != 0)
-                throw new ArgumentException("Enter a management API base URL without credentials, query, or fragment.");
-            host = uri.Host; port = uri.Port;
-            rabbit = new(uri.Scheme, uri.AbsolutePath);
-        }
         KeycloakRootOptions? keycloak = null;
-        if (system == "keycloak")
-        {
-            if (!Uri.TryCreate(Value("url").Trim(), UriKind.Absolute, out var uri) || uri.Scheme is not ("http" or "https")
-                || uri.UserInfo.Length != 0 || uri.Query.Length != 0 || uri.Fragment.Length != 0)
-                throw new ArgumentException("Enter an authority base URL without credentials, query, or fragment.");
-            host = uri.Host; port = uri.Port;
-            keycloak = new(uri.Scheme, uri.AbsolutePath, Value("realm"), Value("clientId"));
-        }
         S3RootOptions? s3 = null;
-        if (system == "s3")
+        if (system is "rabbitmq" or "keycloak" or "s3")
         {
             if (!Uri.TryCreate(Value("url").Trim(), UriKind.Absolute, out var uri) || uri.Scheme is not ("http" or "https")
                 || uri.UserInfo.Length != 0 || uri.Query.Length != 0 || uri.Fragment.Length != 0)
-                throw new ArgumentException("Enter a service endpoint URL without credentials, query, or fragment.");
+                throw new ArgumentException("Enter an HTTP or HTTPS service URL without credentials, query, or fragment.");
             host = uri.Host; port = uri.Port;
-            var region = Value("region");
-            s3 = new(uri.Scheme, Value("forcePathStyle") != "false", string.IsNullOrWhiteSpace(region) ? null : region);
+            if (system == "rabbitmq") rabbit = new(uri.Scheme, uri.AbsolutePath);
+            else if (system == "keycloak") keycloak = new(uri.Scheme, uri.AbsolutePath, Value("realm"), Value("clientId"));
+            else
+            {
+                if (uri.AbsolutePath != "/") throw new ArgumentException("The S3 service URL must not include a path.");
+                s3 = new(uri.Scheme, Value("forcePathStyle") == "true", string.IsNullOrWhiteSpace(Value("region")) ? null : Value("region").Trim());
+            }
         }
         var credential = new RootCredential(host, port, Value("username"), Value("password"))
         {
             Mongo = system == "mongo" ? new(Value("authDatabase"), Value("directConnection") == "true") : null,
-            Postgres = system == "postgres" ? new(Value("database")) : null, RabbitMq = rabbit,
-            Keycloak = keycloak, S3 = s3
+            Postgres = system == "postgres" ? new(Value("database")) : null, RabbitMq = rabbit, Keycloak = keycloak, S3 = s3
         };
         return await setup.ResolveAsync(system, credential, Value("keepPassword") == "true", ct);
     }
@@ -96,7 +84,7 @@ public static class InfrastructureEndpoints
         "permission" => "The account connected but does not have the required administrator access.",
         "timeout" => "The connection test timed out.",
         "unsupported" => "This check requires Redis 7 or later with ACL administration available.",
-        "management_api" => "The service's admin API did not respond as expected. Check its URL and that it is reachable (for RabbitMQ, confirm the management plugin is enabled).",
+        "management_api" => "The management API did not respond as expected. Check the service URL and administrator API availability.",
         "database" => "The connection or authentication database could not be used.",
         _ => "The service could not be reached or did not return a usable response. Check its address and availability."
     };

@@ -79,10 +79,10 @@ public sealed class InfrastructureSetup(IHttpContextAccessor http, SetupBootstra
         var (registry, session) = await RequireAdministratorAsync(ct);
         await using var lease = await states.AcquireAsync(ct);
         if ((await ReadOrInitializeAsync(registry, ct)).Completed) throw new InvalidOperationException("Bootstrap is complete.");
-        if (values.Count != InfrastructureConnections.Systems.Length) throw new ArgumentException("Test all connections first.");
+        if (values.Count != InfrastructureConnections.Systems.Length) throw new ArgumentException("Test every connection first.");
         var snapshot = InfrastructureConnections.Systems.ToDictionary(system => system, system =>
         {
-            if (!values.TryGetValue(system, out var value)) throw new ArgumentException("Test all connections first.");
+            if (!values.TryGetValue(system, out var value)) throw new ArgumentException("Test every connection first.");
             var normalized = InfrastructureConnections.Normalize(system, value.Credential);
             if (!receipts.Matches(value.Receipt, session, system, normalized))
                 throw new ArgumentException("A connection changed or its test expired. Test it again.");
