@@ -1,17 +1,17 @@
 function initialize() {
     const root = document.querySelector('[data-infrastructure]');
     if (!root || root.dataset.initialized) return;
-    root.dataset.initialized = 'true';
     const forms = [...root.querySelectorAll('form[data-service]')];
     const finish = root.querySelector('[data-finish]');
-    if (!finish || forms.length !== 4) return;
+    if (!finish || forms.length === 0) return;
+    root.dataset.initialized = 'true';
     const receipts = new Map();
     const revisions = new Map();
     const busy = new Set();
     let saving = false;
     const update = () => {
-        root.querySelector('[data-progress]').textContent = `${receipts.size} of 4 connections verified`;
-        finish.disabled = saving || busy.size > 0 || receipts.size !== 4;
+        root.querySelector('[data-progress]').textContent = `${receipts.size} of ${forms.length} connections verified`;
+        finish.disabled = saving || busy.size > 0 || receipts.size !== forms.length;
     };
     const invalidate = form => {
         receipts.delete(form.dataset.service);
