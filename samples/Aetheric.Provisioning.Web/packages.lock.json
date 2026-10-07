@@ -8,6 +8,19 @@
         "resolved": "10.0.12",
         "contentHash": "+sIBo9AMBZH46qHWHQdfzcGMt+RuBaPYrUMOAM9VjA7MQ9QtIez3lq1C3E05+Yroa94KKt3DSWaxmCI4H28a9Q=="
       },
+      "AWSSDK.Core": {
+        "type": "Transitive",
+        "resolved": "4.0.100.3",
+        "contentHash": "KU+8IlwHqh68J82FXvsNgehAuG0Z++Ul62oD5sg5Iyj4RgSdUKer3nbLBJbW31DAM7mgEuckhsEcJW+2wYpSVA=="
+      },
+      "AWSSDK.S3": {
+        "type": "Transitive",
+        "resolved": "4.0.100.3",
+        "contentHash": "bHe+BZRyC/TnyPw3/l6N96V/hqtBHyjtXINVrVxVl8LTYx2fxNI1HTwknm0jslSkOiOKeHRZ/oduxMcJXBbtsg==",
+        "dependencies": {
+          "AWSSDK.Core": "[4.0.100.3, 5.0.0)"
+        }
+      },
       "DnsClient": {
         "type": "Transitive",
         "resolved": "1.6.1",
@@ -170,6 +183,7 @@
       "aetheric.provisioning.infrastructure": {
         "type": "Project",
         "dependencies": {
+          "AWSSDK.S3": "[4.0.100.3, )",
           "Aetheric.Provisioning.Application": "[1.0.0, )",
           "MongoDB.Driver": "[3.11.2, )",
           "Npgsql": "[10.0.0, )",

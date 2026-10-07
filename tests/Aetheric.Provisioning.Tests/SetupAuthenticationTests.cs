@@ -107,7 +107,8 @@ public sealed class SetupAuthenticationTests
                 var fields = new Dictionary<string,string> { ["__RequestVerificationToken"] = csrf,
                     ["system"] = system, ["host"] = "localhost", ["port"] = "1234", ["username"] = "root",
                     ["password"] = "do-not-echo-root-password", ["url"] = "http://localhost:15672/",
-                    ["database"] = "postgres", ["authDatabase"] = "admin", ["directConnection"] = "true" };
+                    ["database"] = "postgres", ["authDatabase"] = "admin", ["directConnection"] = "true",
+                    ["realm"] = "master", ["clientId"] = "admin-cli", ["region"] = "us-east-1", ["forcePathStyle"] = "true" };
                 var test = await host.Client.PostAsync("/setup/infrastructure/test",new FormUrlEncodedContent(fields));
                 Assert.Equal(HttpStatusCode.OK,test.StatusCode);
                 var json = await test.Content.ReadAsStringAsync();
