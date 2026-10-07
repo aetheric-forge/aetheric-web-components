@@ -6,7 +6,7 @@ using Aetheric.Provisioning.Registry;
 namespace Aetheric.Provisioning.Components;
 
 public sealed class SetupBootstrap(BootstrapConnectionConfiguration configuration, IRegistryBootstrapStore store,
-    SetupSessions sessions, ISetupRegistryClients clients, IInfrastructureStateStore infrastructure)
+    SetupSessions sessions, ISetupRegistryClients clients, IInfrastructureStateStore infrastructure, Aetheric.Provisioning.Engine.IRootCredentialStore credentials)
 {
     public async Task<RegistryBootstrapState> StateAsync(CancellationToken ct)
     {
@@ -21,6 +21,8 @@ public sealed class SetupBootstrap(BootstrapConnectionConfiguration configuratio
         var state = await infrastructure.ReadAsync(ct);
         if (state is not null && (state.Deployment != registry.Settings || state.SubjectId != registry.SubjectId))
             throw new InvalidDataException("Infrastructure deployment binding changed.");
+        if (state?.Completed == true && configuration.PersistClientSecret
+            && await credentials.TryReadAsync("provisioner-client", ct) is null) return;
         if (state?.Completed == true) throw new InvalidOperationException("Bootstrap is complete.");
     }
     public string RequireConnection(ClaimsPrincipal user)

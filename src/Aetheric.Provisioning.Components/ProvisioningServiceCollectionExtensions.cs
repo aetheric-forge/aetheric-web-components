@@ -26,6 +26,7 @@ public static class ProvisioningServiceCollectionExtensions
         services.AddScoped<InfrastructureSetup>();
         services.AddSingleton(connectionConfiguration);
         // Authentication is registered separately by the host.
+        services.AddSingleton<ISetupClientVerifier, SetupClientVerifier>();
         services.AddScoped<BootstrapConnection>();
 
         return services;

@@ -7,6 +7,7 @@
 @using Aetheric.Provisioning.Registry
 @inject BootstrapConnectionConfiguration Configuration
 @inject BootstrapConnection Connection
+@inject SetupBootstrap Bootstrap
 @inject AdministratorSignInConfiguration SignIn
 @inject SetupSessions Sessions
 @using Microsoft.AspNetCore.Components.Forms
@@ -39,10 +40,11 @@
                     <fieldset disabled="@(_busy || !_interactive)">
                         <legend class="visually-hidden">Client credentials</legend>
                         <label for="client-id">Client ID</label>
-                        <input id="client-id" name="client-id" autocomplete="off" required maxlength="200" value="@Configuration.ClientId" />
+                        <input id="client-id" name="client-id" autocomplete="off" required maxlength="200" value="@Configuration.ClientId" readonly="@(!_clientEditable)" aria-describedby="client-id-help" />
+                        <p id="client-id-help" class="muted">@(_clientEditable ? "Choose an existing Keycloak client. Its ID is saved after verification and locked when an administrator is selected." : "This setup is bound to the verified provisioner client shown above.")</p>
                         <label for="client-secret">Client secret</label>
                         <input id="client-secret" name="client-secret" type="password" autocomplete="off" required maxlength="4096" aria-describedby="secret-help" />
-                        <p id="secret-help" class="muted">Use the client’s secret, not your personal password. It is kept temporarily on the server for setup and isn’t saved to disk.</p>
+                        <p id="secret-help" class="muted">Use the client’s secret, not your personal password. @(Configuration.PersistClientSecret ? "After administrator sign-in, it is saved encrypted for ongoing admin login." : "It is kept temporarily on the server for setup and isn’t saved to disk.")</p>
                         <button type="submit">@(_busy ? "Checking connection…" : "Check connection")</button>
                     </fieldset>
                 </form>
@@ -81,6 +83,15 @@
 </main>
 
 @code {
+    private bool _clientEditable;
+    protected override async Task OnInitializedAsync()
+    {
+        if (Configuration.AllowClientSelection)
+        {
+            var state = await Bootstrap.StateAsync(default);
+            _clientEditable = state.Phase == Aetheric.Provisioning.Application.RegistryBootstrapPhase.AwaitingPrincipal && state.SubjectId is null;
+        }
+    }
     private ElementReference _form;
     private IJSObjectReference? _formModule;
     public sealed record SubmittedCredentials(string ClientId, string ClientSecret);

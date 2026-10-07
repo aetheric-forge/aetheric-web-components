@@ -99,6 +99,9 @@ public static class SetupAuthentication
             options.BackchannelTimeout = TimeSpan.FromSeconds(30);
             options.Events.OnRedirectToIdentityProvider = context =>
             {
+                context.Options.ClientId = connection.ClientId;
+                context.Options.TokenValidationParameters.ValidAudience = connection.ClientId;
+                context.ProtocolMessage.ClientId = connection.ClientId;
                 context.ProtocolMessage.RedirectUri = signIn.Callback.AbsoluteUri;
                 context.ProtocolMessage.Prompt = "login";
                 return Task.CompletedTask;
@@ -145,6 +148,13 @@ public static class SetupAuthentication
                     identity.AddClaim(new Claim(AdminSessionClaim, Guid.NewGuid().ToString("N")));
                     identity.AddClaim(new Claim(AdminExpiryClaim, expires.ToUnixTimeSeconds().ToString(System.Globalization.CultureInfo.InvariantCulture)));
                     context.Properties!.ExpiresUtc = expires;
+                    if (connection.PersistClientSecret)
+                    {
+                        var secret = sessions.Secret(id) ?? throw new UnauthorizedAccessException();
+                        var credentials = context.HttpContext.RequestServices.GetRequiredService<Aetheric.Provisioning.Engine.IRootCredentialStore>();
+                        await credentials.SetAsync("provisioner-client", new(connection.Issuer,
+                            new Uri(connection.Issuer).Port, connection.ClientId, secret), context.HttpContext.RequestAborted);
+                    }
                     sessions.Clear();
                     context.Properties.Items.Remove(SessionProperty);
                     var infrastructure = await context.HttpContext.RequestServices.GetRequiredService<IInfrastructureStateStore>()
