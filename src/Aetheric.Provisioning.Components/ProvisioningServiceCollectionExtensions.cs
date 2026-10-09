@@ -1,4 +1,6 @@
 using Aetheric.Provisioning.Application;
+using Aetheric.Provisioning.Components.Terminology;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Aetheric.Provisioning.Definitions;
 using Aetheric.Provisioning.Engine;
 using Aetheric.Provisioning.Simulation;
@@ -25,12 +27,25 @@ public static class ProvisioningServiceCollectionExtensions
         services.AddSingleton<InfrastructureReceipts>();
         services.AddScoped<InfrastructureSetup>();
         services.AddSingleton(connectionConfiguration);
+        services.AddTerminology();
         // Authentication is registered separately by the host.
         services.AddSingleton<ISetupClientVerifier, SetupClientVerifier>();
         services.AddScoped<BootstrapConnection>();
 
         return services;
     }
+    /// <summary>
+    /// Registers the terminology service the UI reads its level names from. Defaults to an in-memory
+    /// store (academic terms); register your own ITerminologyStore (before or after) to persist the choice.
+    /// AddProvisioningBootstrap already calls this.
+    /// </summary>
+    public static IServiceCollection AddTerminology(this IServiceCollection services)
+    {
+        services.TryAddSingleton<ITerminologyStore, InMemoryTerminologyStore>();
+        services.TryAddSingleton<TerminologyService>();
+        return services;
+    }
+
     /// <summary>Registers the optional simulation backend; not the production messaging transport.</summary>
     public static IServiceCollection AddProvisioningSimulation(this IServiceCollection services)
     {
