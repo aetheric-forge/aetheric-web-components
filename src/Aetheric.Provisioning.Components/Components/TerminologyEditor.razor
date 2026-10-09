@@ -1,0 +1,91 @@
+@using Aetheric.Provisioning.Components.Terminology
+@inject TerminologyService Terminology
+
+<section class="terminology-editor aetheric-provisioning" aria-labelledby="terminology-heading">
+    <h2 id="terminology-heading">Terminology</h2>
+    <p class="hint">Choose the names this deployment uses for its organisational levels. Only labels change.</p>
+    <label for="terminology-template">Template</label>
+    <select id="terminology-template" value="@_templateId" @onchange="OnTemplateChanged">
+        @foreach (var template in TerminologyTemplate.BuiltIn)
+        {
+            <option value="@template.Id">@template.Name</option>
+        }
+        <option value="@TerminologyTemplate.CustomId">Custom</option>
+    </select>
+    <div class="form-grid">
+        <div><label for="term-university">University is called</label>
+            <input id="term-university" @bind="_terms.University" @bind:after="Edited" maxlength="60" /></div>
+        <div><label for="term-faculty">Faculty is called</label>
+            <input id="term-faculty" @bind="_terms.Faculty" @bind:after="Edited" maxlength="60" /></div>
+        <div><label for="term-campus">Campus is called</label>
+            <input id="term-campus" @bind="_terms.Campus" @bind:after="Edited" maxlength="60" /></div>
+        <div><label for="term-institution">Institution is called</label>
+            <input id="term-institution" @bind="_terms.Institution" @bind:after="Edited" maxlength="60" /></div>
+        <div><label for="term-department">Department is called</label>
+            <input id="term-department" @bind="_terms.Department" @bind:after="Edited" maxlength="60" /></div>
+    </div>
+    <button type="button" @onclick="Save" disabled="@_saving">@(_saving ? "Saving…" : "Save terminology")</button>
+    @if (_saved) { <span role="status"> Saved.</span> }
+    @if (_error is not null) { <p role="alert">@_error</p> }
+</section>
+
+@code {
+    private string _templateId = TerminologyTemplate.Academic.Id;
+    private EditableTerms _terms = new();
+    private bool _saving, _saved;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Terminology.EnsureLoadedAsync();
+        _templateId = Terminology.Selection.TemplateId;
+        _terms = EditableTerms.From(Terminology.Terms);
+    }
+
+    private void OnTemplateChanged(ChangeEventArgs e)
+    {
+        _templateId = e.Value?.ToString() ?? TerminologyTemplate.Academic.Id;
+        _saved = false;
+        // Picking a built-in loads its terms into the fields; Custom keeps whatever is shown.
+        if (TerminologyTemplate.BuiltIn.FirstOrDefault(t => t.Id == _templateId) is { } template)
+            _terms = EditableTerms.From(template.Terms);
+    }
+
+    // Editing a field on a built-in template turns it into a custom set.
+    private void Edited()
+    {
+        _saved = false;
+        _templateId = TerminologyTemplate.CustomId;
+    }
+
+    private async Task Save()
+    {
+        _saving = true;
+        _error = null;
+        try
+        {
+            var selection = _templateId == TerminologyTemplate.CustomId
+                ? new TerminologySelection(TerminologyTemplate.CustomId, _terms.ToTerms())
+                : new TerminologySelection(_templateId);
+            await Terminology.SaveAsync(selection);
+            _terms = EditableTerms.From(Terminology.Terms);
+            _saved = true;
+        }
+        catch (Exception)
+        {
+            _error = "Could not save terminology. Check that the host's terminology store is writable.";
+        }
+        finally { _saving = false; }
+    }
+
+    private sealed class EditableTerms
+    {
+        public string University { get; set; } = "";
+        public string Faculty { get; set; } = "";
+        public string Campus { get; set; } = "";
+        public string Institution { get; set; } = "";
+        public string Department { get; set; } = "";
+        public static EditableTerms From(Terms t) => new() { University = t.University, Faculty = t.Faculty, Campus = t.Campus, Institution = t.Institution, Department = t.Department };
+        public Terms ToTerms() => new(University, Faculty, Campus, Institution, Department);
+    }
+}

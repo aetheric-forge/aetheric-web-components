@@ -1,6 +1,7 @@
 @page "/simulation"
 @rendermode InteractiveServer
 @inject Aetheric.Provisioning.Application.ProvisioningReview Review
+@inject Aetheric.Provisioning.Components.Terminology.TerminologyService Terminology
 @using System.Collections.Immutable
 @using Aetheric.Provisioning.Definitions
 
@@ -16,7 +17,7 @@
         <div class="form-grid">
             <label>Repository URL<input id="repository" value="@_repository" @oninput="e => SourceChanged(() => _repository = Value(e))" disabled="@(_busy || !_interactive)" /></label>
             <label>Branch, tag, or commit<input id="revision" value="@_revision" @oninput="e => SourceChanged(() => _revision = Value(e))" disabled="@(_busy || !_interactive)" /></label>
-            <label>Institution YAML path<input id="definition-path" value="@_definitionPath" @oninput="e => SourceChanged(() => _definitionPath = Value(e))" disabled="@(_busy || !_interactive)" /></label>
+            <label>@Terminology.Terms.Institution YAML path<input id="definition-path" value="@_definitionPath" @oninput="e => SourceChanged(() => _definitionPath = Value(e))" disabled="@(_busy || !_interactive)" /></label>
             <label>Bindings YAML path<input id="bindings-path" value="@_bindingsPath" @oninput="e => SourceChanged(() => _bindingsPath = Value(e))" disabled="@(_busy || !_interactive)" /></label>
         </div>
         <div class="controls"><button id="load-git" @onclick="LoadGit" disabled="@(_busy || !_interactive)">@(_busy ? "Working…" : "Load from public GitHub")</button><button id="load-fixture" class="secondary" @onclick="LoadFixture" disabled="@(_busy || !_interactive)">Use bundled Decisions example</button></div>
@@ -24,14 +25,14 @@
     @if (Review.Loaded is { } loaded)
     {
         <section class="summary">
-            <div><span>INSTITUTION</span><strong>@loaded.Name · @loaded.Requirements.Version</strong></div>
+            <div><span>@Terminology.Terms.Institution.ToUpperInvariant()</span><strong>@loaded.Name · @loaded.Requirements.Version</strong></div>
             <div><span>RESOLVED COMMIT</span><strong><code>@loaded.Source.Definition.Provenance.Commit[..12]</code></strong></div>
             <div><span>RESOURCES</span><strong>@loaded.Requirements.Resources.Count(r => r.Ownership == "owned") owned / @loaded.Requirements.Resources.Count(r => r.Ownership == "parent") inherited</strong></div>
         </section>
         <p>@loaded.Description</p>
         <section aria-labelledby="configure-heading">
             <h2 id="configure-heading">2. Configure the deployment</h2>
-            <p>These overrides change deployment bindings. The institution definition stays unchanged.</p>
+            <p>These overrides change deployment bindings. The @Terminology.Terms.Institution.ToLowerInvariant() definition stays unchanged.</p>
             <label>Deployment name<input id="environment" value="@_environment" @oninput="e => ConfigurationChanged(() => _environment = Value(e))" disabled="@(_busy || !_interactive)" /></label>
             @foreach (var binding in _bindings)
             {
@@ -95,10 +96,12 @@
         </section>
     }
     <p role="status" aria-live="polite">@_status</p>
-    <footer><a href="/setup">Return to setup</a><p>Separate institution requirements, deployment bindings, and parent context. Live adapters follow in M3.</p></footer>
+    <footer><a href="/setup">Return to setup</a><p>Separate @Terminology.Terms.Institution.ToLowerInvariant() requirements, deployment bindings, and parent context. Live adapters follow in M3.</p></footer>
 </main>
 
 @code {
+    protected override Task OnInitializedAsync() => Terminology.EnsureLoadedAsync();
+
     private string _repository = "https://github.com/aetheric-forge/adr-campus";
     private string _revision = "main";
     private string _definitionPath = "institution/decisions-institution.yaml";
