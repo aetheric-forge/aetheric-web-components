@@ -10,6 +10,8 @@ public sealed class BootstrapConnectionConfiguration
     public bool PersistClientSecret { get; set; }
     public string Authority { get; init; } = "";
     public string Realm { get; init; } = "";
+    // Deployment-owned private Admin API endpoint; never accepted from setup form input.
+    public string? AdminApiBaseAddress { get; init; }
     public string ClientId { get; set; } = "";
     public string AdminRole { get; init; } = "forge-admin";
     public string StateDirectory { get; init; } = "data/bootstrap";
@@ -17,7 +19,8 @@ public sealed class BootstrapConnectionConfiguration
     public string PublicOrigin { get; init; } = "";
     public string Issuer => Authority.TrimEnd('/') + "/realms/" + Uri.EscapeDataString(Realm);
     public KeycloakOptions Options(string clientId, string secret) => new()
-        { Authority = Authority, Realm = Realm, ClientId = clientId, ClientSecret = secret };
+        { Authority = Authority, Realm = Realm, ClientId = clientId, ClientSecret = secret,
+          AdminApiBaseAddress = AdminApiBaseAddress };
     public bool IsConfigured => !string.IsNullOrWhiteSpace(Authority)
         && !string.IsNullOrWhiteSpace(Realm) && !string.IsNullOrWhiteSpace(ClientId);
 }
